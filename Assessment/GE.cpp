@@ -158,7 +158,7 @@ public:
 
         fin.close();
 
-       /* cout << index1 << " " << index2 << endl;
+        /*cout << index1 << " " << index2 << endl;
         for (int i = 0; i < index1; i++) {
             for (int j = 0; j < tilesHigh; j++) {
                 cout << data[i][j] << " ";
@@ -169,6 +169,27 @@ public:
        
 
     }
+
+    int getPixelWidth()  const { return tilesWide * tileWidth; }
+    int getPixelHeight() const { return tilesHigh * tileHeight; }
+
+    //void draw(GamesEngineeringBase::Window& canvas, int camX, int camY) {
+    //    for (int i = 0; i < tilesHigh; ++i) {
+    //        for (int j = 0; j < tilesWide; ++j) {
+    //            const unsigned int tileID = data[i][j];
+    //            const int xPos = j * tileWidth - camX;
+    //            const int yPos = i * tileHeight - camY;
+    //            if (xPos + (int)tileWidth <= 0 || yPos + (int)tileHeight <= 0 ||
+    //                xPos >= (int)canvas.getWidth() || yPos >= (int)canvas.getHeight()) {
+    //                continue;
+    //            }
+
+    //            ts[tileID].draw(canvas, xPos, yPos);
+
+    //            //std::cout << "Draw tile ID=" << tileID << " at (" << xPos << "," << yPos << ")\n";
+    //        }
+    //    }
+    //}
 
     ~world() {
         for (int i = 0; i < worldSize; ++i)
@@ -185,13 +206,14 @@ public:
         unsigned int X = x / 384;
         unsigned int Y = y / 384;
 
-        for (int i = 0; i < tilesWide; i++) {
-            for (int j = 0; j < tilesHigh; j++) {
+        for (int i = 0; i < tilesHigh; i++) {
+           for (int j = 0; j < tilesWide; j++) {
                 unsigned int tileID = data[i][j];
 
                 // 计算绘制位置
-                int xPos = i * tileWidth;
-                int yPos = j * tileHeight;
+                int yPos = i * tileHeight;
+                int xPos = j * tileWidth;
+                
 
                 // 绘制该 tile
                 //ts[tileID].setPosition(xPos, yPos);
@@ -259,45 +281,66 @@ public:
             std::cerr << "Failed to load hero" << std::endl;
         }
         else {
-            std::cerr << "Load hero!" << endl;
+            std::cerr << "Load hero! -- " << filename << endl;
         }
 
-        x = 672; y = 672;
+        x = 640; y = 640;
         speed = 300;
     }
 
-    void update(GamesEngineeringBase::Window& canvas, float dt) {
-        int move = static_cast<int>(speed * dt);
-        if (canvas.keyPressed('W')) y -= move;
-        if (canvas.keyPressed('S')) y += move;
-        if (canvas.keyPressed('A')) x -= move;
-        if (canvas.keyPressed('D')) x += move;
+
+
+    void update(GamesEngineeringBase::Window& canvas, int _x, int _y) {
+        x += _x;
+        x = max(0, x);
+        x = min(static_cast<int>(canvas.getWidth()) - static_cast<int>(sprite.width), x);
+
+        y += _y;
+        y = max(0, y);
+        y = min(static_cast<int>(canvas.getHeight()) - static_cast<int>(sprite.height), y);
 
         // 限制在窗口范围内
-        if (x < 0) x = 0;
+       /* if (x < 0) x = 0;
         if (x > (int)canvas.getWidth() - (int)sprite.width)
             x = (int)canvas.getWidth() - (int)sprite.width;
 
         if (y < 0) y = 0;
         if (y > (int)canvas.getHeight() - (int)sprite.height)
-            y = (int)canvas.getHeight() - (int)sprite.height;
+            y = (int)canvas.getHeight() - (int)sprite.height;*/
 
     }
 
     void draw(GamesEngineeringBase::Window& canvas) {
         for (unsigned int yy = 0; yy < sprite.height; yy++) {
             for (unsigned int xx = 0; xx < sprite.width; xx++) {
+
+                if (sprite.alphaAtUnchecked(xx, yy) == 0)
+                    continue; // 跳过透明区域
+
                 int screenX = x + xx;
                 int screenY = y + yy;
 
                 //防止越界写入
                 if (screenX >= 0 && screenX < (int)canvas.getWidth() &&
                     screenY >= 0 && screenY < (int)canvas.getHeight()) {
-                    canvas.draw(screenX, screenY, sprite.atUnchecked(xx, yy));
+                        canvas.draw(screenX, screenY, sprite.atUnchecked(xx, yy));
+                    
+                    
                 }
             }
         }
 
+    }
+
+    void drawAt(GamesEngineeringBase::Window& canvas, int sx, int sy) {
+        for (unsigned yy = 0; yy < sprite.height; ++yy)
+            for (unsigned xx = 0; xx < sprite.width; ++xx) {
+                int X = sx + xx, Y = sy + yy;
+                if (0 <= X && X < (int)canvas.getWidth() && 0 <= Y && Y < (int)canvas.getHeight())
+                    canvas.draw(X, Y, sprite.atUnchecked(xx, yy));
+            }
+
+        //cout << "DrawAt" << endl;
     }
                    
 };
@@ -431,6 +474,147 @@ struct Camera {
 };
 
 
+// 用于子弹
+struct Projectile {
+    float x, y;         // 位置
+    float vx, vy;       // 速度
+    int damage;         // 伤害
+    bool fromHero;      // 是否英雄子弹
+    bool alive;         // 是否有效
+
+    Projectile(float X, float Y, float VX, float VY, int dmg, bool hero)
+        : x(X), y(Y), vx(VX), vy(VY), damage(dmg), fromHero(hero), alive(true) {
+    }
+};
+
+// NPC类型枚举 
+// TODO:修改
+enum class NPCType { Normal, Runner, Tank, Turret };
+
+class NPC {
+public:
+    float x, y;          // 世界坐标位置
+    float speed;         // 移动速度
+    int hp, maxHP;       // 当前与最大生命
+    float radius;        // 碰撞半径
+    NPCType type;        // 类型
+    bool alive;          // 是否存活
+    float shootCooldown; // 炮台型使用
+    GamesEngineeringBase::Image sprite; // 精灵图像
+
+public:
+    NPC() : x(0), y(0), speed(0), hp(1), maxHP(1), radius(16),
+        type(NPCType::Normal), alive(true), shootCooldown(0) {
+    }
+
+    // 生成不同类型NPC
+    void init(NPCType t, float startX, float startY) {
+        type = t;
+        x = startX;
+        y = startY;
+        alive = true;
+
+        switch (type) {
+        case NPCType::Normal:
+            sprite.load("Resources/npc_normal.png");
+            speed = 60;
+            hp = maxHP = 3;
+            radius = 16;
+            break;
+        case NPCType::Runner:
+            sprite.load("Resources/npc_runner.png");
+            speed = 110;
+            hp = maxHP = 2;
+            radius = 14;
+            break;
+        case NPCType::Tank:
+            sprite.load("Resources/npc_tank.png");
+            speed = 35;
+            hp = maxHP = 6;
+            radius = 20;
+            break;
+        case NPCType::Turret:
+            sprite.load("Resources/npc_turret.png");
+            speed = 0;
+            hp = maxHP = 4;
+            radius = 18;
+            shootCooldown = 1.0f;
+            break;
+        }
+    }
+
+    // 更新NPC逻辑
+    void update(float dt, float heroX, float heroY, std::vector<Projectile>& enemyBullets) {
+        if (!alive) return;
+
+        if (type == NPCType::Turret) {
+            // 炮台不移动，只发射子弹
+            shootCooldown -= dt;
+            if (shootCooldown <= 0.f) {
+                shootCooldown = 1.2f; // 射速
+                float dx = heroX - x;
+                float dy = heroY - y;
+                float len = sqrtf(dx * dx + dy * dy);
+                dx /= len;
+                dy /= len;
+                enemyBullets.emplace_back(x, y, dx * 200.f, dy * 200.f, 1, false);
+            }
+        }
+        else {
+            // 其他类型NPC自动追踪英雄
+            float dx = heroX - x;
+            float dy = heroY - y;
+            float len = sqrtf(dx * dx + dy * dy);
+            if (len > 0.001f) {
+                dx /= len;
+                dy /= len;
+                x += dx * speed * dt;
+                y += dy * speed * dt;
+            }
+        }
+    }
+
+    // 绘制
+    void draw(GamesEngineeringBase::Window& canvas, int camX, int camY) {
+        if (!alive) return;
+
+        int screenX = (int)(x - camX);
+        int screenY = (int)(y - camY);
+
+        // 超出屏幕不绘制（提高性能）
+        if (screenX + (int)sprite.width < 0 || screenY + (int)sprite.height < 0 ||
+            screenX >= (int)canvas.getWidth() || screenY >= (int)canvas.getHeight())
+            return;
+
+        for (unsigned int yy = 0; yy < sprite.height; yy++) {
+            for (unsigned int xx = 0; xx < sprite.width; xx++) {
+                int drawX = screenX + xx;
+                int drawY = screenY + yy;
+                if (drawX >= 0 && drawX < (int)canvas.getWidth() &&
+                    drawY >= 0 && drawY < (int)canvas.getHeight()) {
+                    canvas.draw(drawX, drawY, sprite.atUnchecked(xx, yy));
+                }
+            }
+        }
+    }
+
+    // 被攻击
+    void takeDamage(int dmg) {
+        hp -= dmg;
+        if (hp <= 0) {
+            alive = false;
+            hp = 0;
+        }
+    }
+
+    // 与英雄的简单碰撞检测
+    bool collidesWith(float heroX, float heroY, float heroRadius) const {
+        float dx = heroX - x;
+        float dy = heroY - y;
+        float r = radius + heroRadius;
+        return dx * dx + dy * dy < r * r;
+    }
+};
 
 
 class Manager {
@@ -443,9 +627,14 @@ class Manager {
 
     //bool drawAlpha = false;
 public:
-    Manager(GamesEngineeringBase::Window& canvas) : hero(canvas, "Resources/L.png"), w() {}
-    Manager(GamesEngineeringBase::Window& canvas, string filename) : hero(canvas, "Resources/L.png"), w(filename) {}
-    Manager(GamesEngineeringBase::Window& canvas, string filename, float dt) : hero(canvas, "Resources/L.png"), w(filename), dt(){
+    Manager(GamesEngineeringBase::Window& canvas) : hero(canvas, "Resources/plane.png"), w() {}
+    Manager(GamesEngineeringBase::Window& canvas, string filename) : hero(canvas, "Resources/plane.png"), w(filename) {
+        cam.width = canvas.getWidth();
+        cam.height = canvas.getHeight();
+        cam.x = hero.x - cam.width / 2;
+        cam.y = hero.y - cam.height / 2;
+    }
+    Manager(GamesEngineeringBase::Window& canvas, string filename, float dt) : hero(canvas, "Resources/plane.png"), w(filename), dt(){
         cam.width = canvas.getWidth();
         cam.height = canvas.getHeight();
         cam.x = hero.x - cam.width / 2;
@@ -454,38 +643,53 @@ public:
 
 
     void update(GamesEngineeringBase::Window& canvas) {
-        int x = 0;
-        y = 0;
+        /*int x = 0;
+        y = 0;*/
         //scroll
         //y += 2;
         //drawAlpha = false;
-        if (canvas.keyPressed(VK_UP)) y += 5;
+        /*if (canvas.keyPressed(VK_UP)) y += 5;
         if (canvas.keyPressed(VK_DOWN)) y -= 1;
         if (canvas.keyPressed(VK_LEFT)) x -= 1;
-        if (canvas.keyPressed(VK_RIGHT)) x += 1;
+        if (canvas.keyPressed(VK_RIGHT)) x += 1;*/
         //if (canvas.keyPressed('A')) drawAlpha = true;
-        hero.update(canvas, dt);
+        // 
+        int x = 0, y = 0;
+        if (canvas.keyPressed('W')) y -= 2;
+        if (canvas.keyPressed('S')) y += 2;
+        if (canvas.keyPressed('A')) x -= 2;
+        if (canvas.keyPressed('D')) x += 2;
+
+        hero.update(canvas, x, y);
 
         // Camera follows hero
         cam.x = hero.x - cam.width / 2;
         cam.y = hero.y - cam.height / 2;
 
-        // Clamp camera inside world bounds
-        /*if (cam.x < 0) cam.x = 0;
-        if (cam.y < 0) cam.y = 0;
-        if (cam.x + cam.width > w.getPixelWidth())
-            cam.x = w.getPixelWidth() - cam.width;
-        if (cam.y + cam.height > w.getPixelHeight())
-            cam.y = w.getPixelHeight() - cam.height;*/
+        //cout << "Hero: " << hero.x << ", " << hero.y << endl;
 
+        //cout << "Camera: " << cam.x << ", " << cam.y << endl;
+        // //Clamp camera inside world bounds
+        //if (cam.x < 0) cam.x = 0;
+        //if (cam.y < 0) cam.y = 0;
+        //if (cam.x + cam.width > w.getPixelWidth())
+        //    cam.x = w.getPixelWidth() - cam.width;
+        //if (cam.y + cam.height > w.getPixelHeight())
+        //    cam.y = w.getPixelHeight() - cam.height;
+
+        
 
     }
     void draw(GamesEngineeringBase::Window& canvas) {
-        //if (drawAlpha) w.drawAlphas(canvas, y);
-        //else w.draw(canvas, y);
+        
         w.draw(canvas, x, y);
         hero.draw(canvas);
-        //w.collision2(canvas, hero, y);
+        
+        //// 英雄始终画在屏幕中心
+        //w.draw(canvas, cam.x, cam.y);
+        //hero.drawAt(canvas, cam.width / 2 - hero.sprite.width / 2,
+        //    cam.height / 2 - hero.sprite.height / 2);
+        
 
     }
 
@@ -502,7 +706,6 @@ int main() {
     GamesEngineeringBase::Timer timer;
     float dt = timer.dt();
 
-    //Manager m(canvas);
     Manager m(canvas, "Resources/tiles.txt", dt);
     while (true)
     {

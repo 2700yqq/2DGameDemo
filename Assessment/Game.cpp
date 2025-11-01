@@ -1,57 +1,345 @@
-﻿//#include "iostream"
-//#include <algorithm>
-//#include "GamesEngineeringBase.h"
-//#include <vector>
-//#include <cstdlib>
-//#include <ctime>
-//
-//using namespace std;
-//
-//
-//class Player {
-//public:
-//    int x, y;
-//    int speed;
-//    GamesEngineeringBase::Image sprite;
-//
-//    Player() {
-//        sprite.load("Resources/hero.png");
-//
-//        if (!sprite.load("Resources/hero.png")) {
-//            std::cerr << "Failed to load hero.png" << std::endl;
-//        }
-//
-//        x = 512; y = 384;
-//        speed = 300;
-//    }
-//
-//    void update(GamesEngineeringBase::Window& w, float dt) {
-//        int move = static_cast<int>(speed * dt);
-//        if (w.keyPressed('W')) y -= move;
-//        if (w.keyPressed('S')) y += move;
-//        if (w.keyPressed('A')) x -= move;
-//        if (w.keyPressed('D')) x += move;
-//
-//        // 限制在窗口范围内
-//        if (x < 0) x = 0;
-//        if (x > (int)w.getWidth() - (int)sprite.width)
-//            x = (int)w.getWidth() - (int)sprite.width;
-//
-//        if (y < 0) y = 0;
-//        if (y > (int)w.getHeight() - (int)sprite.height)
-//            y = (int)w.getHeight() - (int)sprite.height;
-//
-//    }
-//
-//    void draw(GamesEngineeringBase::Window& w) {
-//        for (unsigned int yy = 0; yy < sprite.height; yy++)
-//            for (unsigned int xx = 0; xx < sprite.width; xx++)
-//                w.draw(x + xx, y + yy, sprite.atUnchecked(xx, yy));
-//    }
-//                   
-//};
-//
-//
+﻿#include "iostream"
+#include <algorithm>
+#include "GamesEngineeringBase.h"
+#include <vector>
+#include <cstdlib>
+#include <ctime>
+#include <fstream>
+#include <sstream>
+
+using namespace std;
+
+
+class tile {
+    GamesEngineeringBase::Image sprite;
+public:
+    tile() {}
+    void load(std::string filename) {
+        sprite.load(filename);
+    }
+    void draw(GamesEngineeringBase::Window& canvas, int x, int y) {
+        for (unsigned int i = 0; i < sprite.height; i++)
+            // bounds checking goes here
+            if (i + y > 0 && i + y < canvas.getHeight()) {
+                for (unsigned int j = 0; j < sprite.width; j++) {
+                    if (j + x > 0 && j + x < canvas.getWidth()) {
+                        canvas.draw(x + j, y + i, sprite.atUnchecked(j, i));
+                    }
+
+                }
+            }
+
+
+    }
+    unsigned int getHeight() { return sprite.height; }
+    unsigned int getWidth() { return sprite.width; }
+    GamesEngineeringBase::Image& getSprite() { return sprite; }
+
+};
+
+
+const unsigned int tileNum = 24;
+class tileSet {
+    tile t[tileNum];
+public:
+    // create and load tiles here
+    tileSet(std::string pre = "") {
+
+        for (unsigned int i = 0; i < tileNum; i++) {
+            std::string filename;
+            filename = "Resources/" + pre + std::to_string(i) + ".png";
+            t[i].load(filename);
+        }
+    }
+    // access individual tile here
+    tile& operator[](unsigned int index) { return t[index]; }
+};
+
+
+const int worldSize = 1000;
+class world {
+    tileSet ts;
+    unsigned int tilesWide = 0;
+    unsigned int tilesHigh = 0;
+    unsigned int tileWidth = 0;
+    unsigned int tileHeight = 0;
+    unsigned int** data;
+
+
+
+public:
+    world() : ts() {
+        data = new unsigned int* [worldSize];
+        for (int i = 0; i < worldSize; ++i)
+            data[i] = new unsigned int[worldSize];
+
+
+        tilesWide = worldSize;
+        tilesHigh = worldSize;
+        tileWidth = worldSize;
+        tileHeight = worldSize;
+        for (int i = 0; i < worldSize; i++) {
+            for (int j = 0; j < worldSize; j++) {
+                data[i][j] = rand() % tileNum;
+            }
+        }
+
+    }
+
+    //- File handling start
+
+    world(const std::string& filename) : ts() {
+        data = new unsigned int* [worldSize];
+        for (int i = 0; i < worldSize; ++i)
+            data[i] = new unsigned int[worldSize];
+
+
+        tilesWide = worldSize;
+        tilesHigh = worldSize;
+        tileWidth = worldSize;
+        tileHeight = worldSize;
+        for (int i = 0; i < worldSize; i++) {
+            for (int j = 0; j < worldSize; j++) {
+                data[i][j] = rand() % tileNum;
+            }
+        }
+
+        std::ifstream fin(filename);
+
+        if (!fin.is_open()) {
+            std::cerr << "Failed to open tile file: " << filename << std::endl;
+            return;
+        }
+
+        std::string line;
+        bool readingData = false;
+        int index1 = 0;
+        int index2 = 0;
+        while (std::getline(fin, line)) {
+            if (line.empty()) continue;
+
+            if (line.rfind("layer", 0) == 0) {
+                readingData = true;
+                continue;
+            }
+
+            if (!readingData) {
+                // 读取元数据部分
+                std::stringstream ss(line);
+                std::string key;
+                ss >> key;
+
+                if (key == "tileswide") ss >> tilesWide;
+                else if (key == "tileshigh") ss >> tilesHigh;
+                else if (key == "tilewidth") ss >> tileWidth;
+                else if (key == "tileheight") ss >> tileHeight;
+
+                //cout << "tilesWide: " << tilesWide << ";tilesHigh: " << tilesHigh << ";tileWidth: " << tileWidth << ";tileHeight: " << tileHeight << endl;
+
+            }
+            else {
+                // 读取地图数据部分
+                std::stringstream ss(line);
+                string value;
+
+                while (std::getline(ss, value, ',') && value != "") {
+                    //data[0][0] = std::stoi(value);
+                    data[index1][index2] = std::stoi(value);
+                    //cout << value << endl;
+                    index2++;
+                }
+
+                index1++;
+                index2 = 0;
+            }
+
+
+        }
+
+        fin.close();
+
+        /*cout << index1 << " " << index2 << endl;
+        for (int i = 0; i < index1; i++) {
+            for (int j = 0; j < tilesHigh; j++) {
+                cout << data[i][j] << " ";
+            }
+            cout << endl;
+        }*/
+
+
+
+    }
+
+    int getPixelWidth()  const { return tilesWide * tileWidth; }
+    int getPixelHeight() const { return tilesHigh * tileHeight; }
+
+    //void draw(GamesEngineeringBase::Window& canvas, int camX, int camY) {
+    //    for (int i = 0; i < tilesHigh; ++i) {
+    //        for (int j = 0; j < tilesWide; ++j) {
+    //            const unsigned int tileID = data[i][j];
+    //            const int xPos = j * tileWidth - camX;
+    //            const int yPos = i * tileHeight - camY;
+    //            if (xPos + (int)tileWidth <= 0 || yPos + (int)tileHeight <= 0 ||
+    //                xPos >= (int)canvas.getWidth() || yPos >= (int)canvas.getHeight()) {
+    //                continue;
+    //            }
+
+    //            ts[tileID].draw(canvas, xPos, yPos);
+
+    //            //std::cout << "Draw tile ID=" << tileID << " at (" << xPos << "," << yPos << ")\n";
+    //        }
+    //    }
+    //}
+
+    ~world() {
+        for (int i = 0; i < worldSize; ++i)
+            delete[] data[i];
+        delete[] data;
+    }
+
+    //- File Handling end
+
+
+    void draw(GamesEngineeringBase::Window& canvas, unsigned int x, unsigned int y) {
+
+        unsigned int offset = tileWidth / 2;
+        unsigned int X = x / 384;
+        unsigned int Y = y / 384;
+
+        for (int i = 0; i < tilesHigh; i++) {
+            for (int j = 0; j < tilesWide; j++) {
+                unsigned int tileID = data[i][j];
+
+                // 计算绘制位置
+                int yPos = i * tileHeight;
+                int xPos = j * tileWidth;
+
+
+                // 绘制该 tile
+                //ts[tileID].setPosition(xPos, yPos);
+                ts[tileID].draw(canvas, xPos, yPos);
+
+                // Debug输出
+                 //std::cout << "Draw tile ID=" << tileID << " at (" << xPos << "," << yPos << ")\n";
+            }
+        }
+        /* ts[data[Y % tileHeight]].draw(canvas, (canvas.getHeight() / 2) + offset);
+         ts[tarray[(Y + 1) % size]].draw(canvas, offset);
+         ts[tarray[(Y + 2) % size]].draw(canvas, offset - (canvas.getHeight() / 2));*/
+    }
+
+    /* void drawAlphas(GamesEngineeringBase::Window& canvas, unsigned int y) {
+
+         unsigned int offset = y % 384;
+         unsigned int Y = y / 384;
+
+         alphas[tarray[Y % size]].draw(canvas, (canvas.getHeight() / 2) + offset);
+         alphas[tarray[(Y + 1) % size]].draw(canvas, offset);
+         alphas[tarray[(Y + 2) % size]].draw(canvas, offset - (canvas.getHeight() / 2));
+     }*/
+
+
+     // this a simple first collision that just draws the line of collision
+    /* void collision(GamesEngineeringBase::Window& canvas, Plane& h, unsigned int y) {
+
+         int Y = y / 384;
+         tile& T = alphas[tarray[Y % size]];
+
+         unsigned int yCoord = T.getHeight() - ((h.getYCollide() + y) % T.getHeight());
+
+         for (unsigned int x = 0; x < canvas.getWidth(); x++)
+             if (T.getSprite().at(x, yCoord, 0) < 1)
+                 canvas.draw(x, canvas.getHeight() - h.getYCollide(), 255, 0, 0);
+     }
+
+     void collision2(GamesEngineeringBase::Window& canvas, Plane& h, unsigned int y) {
+
+         int Y = y / 384;
+         tile& T = alphas[tarray[Y % size]];
+
+         unsigned int yCoord = T.getHeight() - ((h.getYCollide() + y) % T.getHeight());
+
+         for (unsigned int x = 0; x < h.getWidth(); x++)
+             if (T.getSprite().at(x + h.getX(), yCoord, 0) < 1)
+                 canvas.draw(x + h.getX(), canvas.getHeight() - h.getYCollide(), 255, 0, 0);
+             else
+                 canvas.draw(x + h.getX(), canvas.getHeight() - h.getYCollide(), 0, 255, 0);
+     }*/
+};
+
+
+class Hero {
+public:
+    int x, y;
+    int speed;
+    GamesEngineeringBase::Image sprite;
+
+    Hero(GamesEngineeringBase::Window& canvas, std::string filename) {
+        sprite.load(filename);
+
+        if (!sprite.load(filename)) {
+            std::cerr << "Failed to load hero" << std::endl;
+        }
+        else {
+            std::cerr << "Load hero!" << endl;
+        }
+
+        x = 640; y = 640;
+        speed = 300;
+    }
+
+
+
+    void update(GamesEngineeringBase::Window& canvas, int _x, int _y) {
+        x += _x;
+        x = max(0, x);
+        x = min(static_cast<int>(canvas.getWidth()) - static_cast<int>(sprite.width), x);
+
+        y += _y;
+        y = max(0, y);
+        y = min(static_cast<int>(canvas.getHeight()) - static_cast<int>(sprite.height), y);
+
+        // 限制在窗口范围内
+       /* if (x < 0) x = 0;
+        if (x > (int)canvas.getWidth() - (int)sprite.width)
+            x = (int)canvas.getWidth() - (int)sprite.width;
+
+        if (y < 0) y = 0;
+        if (y > (int)canvas.getHeight() - (int)sprite.height)
+            y = (int)canvas.getHeight() - (int)sprite.height;*/
+
+    }
+
+    void draw(GamesEngineeringBase::Window& canvas) {
+        for (unsigned int yy = 0; yy < sprite.height; yy++) {
+            for (unsigned int xx = 0; xx < sprite.width; xx++) {
+                int screenX = x + xx;
+                int screenY = y + yy;
+
+                //防止越界写入
+                if (screenX >= 0 && screenX < (int)canvas.getWidth() &&
+                    screenY >= 0 && screenY < (int)canvas.getHeight()) {
+                    canvas.draw(screenX, screenY, sprite.atUnchecked(xx, yy));
+                }
+            }
+        }
+
+    }
+
+    void drawAt(GamesEngineeringBase::Window& canvas, int sx, int sy) {
+        for (unsigned yy = 0; yy < sprite.height; ++yy)
+            for (unsigned xx = 0; xx < sprite.width; ++xx) {
+                int X = sx + xx, Y = sy + yy;
+                if (0 <= X && X < (int)canvas.getWidth() && 0 <= Y && Y < (int)canvas.getHeight())
+                    canvas.draw(X, Y, sprite.atUnchecked(xx, yy));
+            }
+
+        //cout << "DrawAt" << endl;
+    }
+
+};
+
+
 //struct Enemy {
 //    int x, y;
 //    float speed;
@@ -59,6 +347,7 @@
 //
 //    Enemy(GamesEngineeringBase::Window& w) {
 //        sprite.load("Resources/enemy.png");
+//
 //        if (!sprite.load("Resources/enemy.png")) {
 //            std::cerr << "Failed to load enemy.png" << std::endl;
 //        }
@@ -82,35 +371,56 @@
 //    }
 //
 //    void draw(GamesEngineeringBase::Window& w) {
-//        for (unsigned int yy = 0; yy < sprite.height; yy++)
-//            for (unsigned int xx = 0; xx < sprite.width; xx++)
-//                if (sprite.alphaAtUnchecked(xx, yy) > 0)
-//                    w.draw(x + xx, y + yy, sprite.atUnchecked(xx, yy));
+//        for (unsigned int yy = 0; yy < sprite.height; yy++) {
+//            for (unsigned int xx = 0; xx < sprite.width; xx++) {
+//                int screenX = x + xx;
+//                int screenY = y + yy;
+//
+//                //防止越界写入
+//                if (screenX >= 0 && screenX < (int)w.getWidth() &&
+//                    screenY >= 0 && screenY < (int)w.getHeight()) {
+//                        w.draw(screenX, screenY, sprite.atUnchecked(xx, yy));
+//                }
+//            }
+//        }
 //    }
 //};
-//
+
 //class Game {
 //public:
 //    GamesEngineeringBase::Window canvas;
 //    GamesEngineeringBase::Timer timer;
 //    bool running = true;
-//    Player player;
+//    Hero hero;
 //    std::vector<Enemy> enemies;
 //    GamesEngineeringBase::Image background;
 //
 //
 //    Game() {
 //        srand(static_cast<unsigned int>(time(0)));
-//        canvas.create(1024, 1024, "WM908 Game Framework");
+//        canvas.create(1024, 768, "WM908 Game Framework");
 //
 //        background.load("Resources/landscape.png");
-//        
-//        enemies.push_back(Enemy(canvas));
+//        player = Hero();
 //
-//        /*for (int i = 0; i < 5; ++i) {
+//       /* enemies.push_back(Enemy(canvas));
+//
+//        enemies.push_back(Enemy(canvas));*/
+//
+//        /*for (int i = 0; i < 2; i++) {
 //            enemies.push_back(Enemy(canvas));
 //        }*/
 //
+//    }
+//    void draw(GamesEngineeringBase::Window & canvas) {
+//        for (int y = 0; y < canvas.getHeight(); y++) {
+//            for (int x = 0; x < canvas.getWidth(); x++) {
+//                // 计算背景图对应像素坐标（浮点比例）
+//                int srcX = x * background.width / canvas.getWidth();
+//                int srcY = y * background.height / canvas.getHeight();
+//                canvas.draw(x, y, background.atUnchecked(srcX, srcY));
+//            }
+//        }
 //    }
 //
 //    void run() {
@@ -138,360 +448,274 @@
 //    void render() {
 //        canvas.clear();
 //
-//        for (int y = 0; y < canvas.getHeight(); y++) {
-//            for (int x = 0; x < canvas.getWidth(); x++) {
-//                // 计算背景图对应像素坐标（浮点比例）
-//                int srcX = x * background.width / canvas.getWidth();
-//                int srcY = y * background.height / canvas.getHeight();
-//                canvas.draw(x, y, background.atUnchecked(srcX, srcY));
-//            }
-//        }
-//                
+//        draw(canvas);
+//       
+//        
+//        /*for (auto& e : enemies){
+//            e.draw(canvas);
+//        }*/
 //
 //        player.draw(canvas);
-//        //for (auto& e : enemies) e.draw(canvas);
 //        canvas.present();
 //    };
 //};
-//
-//int main() {
-//    Game game;
-//    game.run();
-//    return 0;
-//}
 
-
-#include "iostream"
-#include "GamesEngineeringBase.h"
-#include <vector>
-#include <fstream>
-#include <sstream>
-#include <cstdlib>
-#include <ctime>
-#include <algorithm>
-
-using namespace std;
-
-// === TILE SYSTEM =============================================================
-
-enum class TileType {
-    Grass = 0,
-    Sand = 1,
-    Stone = 2,
-    Water = 3
-};
-
-struct Tile {
-    GamesEngineeringBase::Image sprite;
-    TileType type;
-
-    Tile() = default;
-    Tile(const Tile&) = delete;            // 禁止拷贝
-    Tile& operator=(const Tile&) = delete; // 禁止赋值
-    Tile(Tile&&) noexcept = default;       // 允许移动
-    Tile& operator=(Tile&&) noexcept = default;
+struct Camera {
+    int x; // top-left corner of what we see in world space
+    int y;
+    int width;
+    int height;
 };
 
 
-struct TileMap {
-    int tilesWide = 0;
-    int tilesHigh = 0;
-    int tileWidth = 0;
-    int tileHeight = 0;
-    std::vector<std::vector<int>> data;
+// 用于子弹
+struct Projectile {
+    float x, y;         // 位置
+    float vx, vy;       // 速度
+    int damage;         // 伤害
+    bool fromHero;      // 是否英雄子弹
+    bool alive;         // 是否有效
+
+    Projectile(float X, float Y, float VX, float VY, int dmg, bool hero)
+        : x(X), y(Y), vx(VX), vy(VY), damage(dmg), fromHero(hero), alive(true) {
+    }
 };
 
+// NPC类型枚举 
+// TODO:修改
+enum class NPCType { Normal, Runner, Tank, Turret };
 
-TileMap loadTileFile(const std::string& filename) {
-    TileMap map;
-    std::ifstream file(filename);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open tile file: " << filename << std::endl;
-        return map;
+class NPC {
+public:
+    float x, y;          // 世界坐标位置
+    float speed;         // 移动速度
+    int hp, maxHP;       // 当前与最大生命
+    float radius;        // 碰撞半径
+    NPCType type;        // 类型
+    bool alive;          // 是否存活
+    float shootCooldown; // 炮台型使用
+    GamesEngineeringBase::Image sprite; // 精灵图像
+
+public:
+    NPC() : x(0), y(0), speed(0), hp(1), maxHP(1), radius(16),
+        type(NPCType::Normal), alive(true), shootCooldown(0) {
     }
 
-    std::string line;
-    bool readingData = false;
+    // 生成不同类型NPC
+    void init(NPCType t, float startX, float startY) {
+        type = t;
+        x = startX;
+        y = startY;
+        alive = true;
 
-    while (std::getline(file, line)) {
-        // 去掉首尾空格
-        if (line.empty()) continue;
-
-        // 判断是否进入地图数据部分
-        if (line.rfind("layer", 0) == 0) {
-            readingData = true;
-            continue;
+        switch (type) {
+        case NPCType::Normal:
+            sprite.load("Resources/npc_normal.png");
+            speed = 60;
+            hp = maxHP = 3;
+            radius = 16;
+            break;
+        case NPCType::Runner:
+            sprite.load("Resources/npc_runner.png");
+            speed = 110;
+            hp = maxHP = 2;
+            radius = 14;
+            break;
+        case NPCType::Tank:
+            sprite.load("Resources/npc_tank.png");
+            speed = 35;
+            hp = maxHP = 6;
+            radius = 20;
+            break;
+        case NPCType::Turret:
+            sprite.load("Resources/npc_turret.png");
+            speed = 0;
+            hp = maxHP = 4;
+            radius = 18;
+            shootCooldown = 1.0f;
+            break;
         }
+    }
 
-        if (!readingData) {
-            // 读取元数据部分
-            std::stringstream ss(line);
-            std::string key;
-            ss >> key;
+    // 更新NPC逻辑
+    void update(float dt, float heroX, float heroY, std::vector<Projectile>& enemyBullets) {
+        if (!alive) return;
 
-            if (key == "tileswide") ss >> map.tilesWide;
-            else if (key == "tileshigh") ss >> map.tilesHigh;
-            else if (key == "tilewidth") ss >> map.tileWidth;
-            else if (key == "tileheight") ss >> map.tileHeight;
-
-
+        if (type == NPCType::Turret) {
+            // 炮台不移动，只发射子弹
+            shootCooldown -= dt;
+            if (shootCooldown <= 0.f) {
+                shootCooldown = 1.2f; // 射速
+                float dx = heroX - x;
+                float dy = heroY - y;
+                float len = sqrtf(dx * dx + dy * dy);
+                dx /= len;
+                dy /= len;
+                enemyBullets.emplace_back(x, y, dx * 200.f, dy * 200.f, 1, false);
+            }
         }
         else {
-            // 读取地图数据部分
-            std::stringstream ss(line);
-            std::string num;
-            std::vector<int> row;
-
-            while (std::getline(ss, num, ',')) {
-                if (!num.empty())
-                    row.push_back(std::stoi(num));
-            }
-
-            if (!row.empty())
-                map.data.push_back(row);
-        }
-    }
-
-    file.close();
-
-    // 如果 tile 宽高没指定，使用默认值
-    if (map.tileWidth == 0) map.tileWidth = 32;
-    if (map.tileHeight == 0) map.tileHeight = 32;
-
-    map.tilesHigh = (int)map.data.size();
-    map.tilesWide = map.tilesHigh > 0 ? (int)map.data[0].size() : 0;
-
-    std::cout << "Loaded tile map: " << map.tilesWide << "x" << map.tilesHigh
-        << " tiles (" << map.tileWidth << "x" << map.tileHeight << " px)" << std::endl;
-
-    return map;
-}
-
-
-std::vector<Tile> loadTilesFromFile(const std::string& filename) {
-    std::vector<Tile> tiles;
-    std::ifstream file(filename);
-
-    if (!file.is_open()) {
-        std::cerr << "❌ Failed to open tile definition file: " << filename << std::endl;
-        return tiles;
-    }
-
-    std::string line;
-    int lineNumber = 0;
-
-    while (std::getline(file, line)) {
-        lineNumber++;
-        if (line.empty()) continue;
-
-        std::stringstream ss(line);
-        std::string idStr, path;
-        std::getline(ss, idStr, ',');
-        std::getline(ss, path);
-
-        // 去掉多余空格
-        idStr.erase(remove_if(idStr.begin(), idStr.end(), ::isspace), idStr.end());
-        path.erase(remove_if(path.begin(), path.end(), ::isspace), path.end());
-
-        if (idStr.empty() || path.empty()) {
-            std::cerr << "⚠️ Skipping malformed line " << lineNumber << " in " << filename << std::endl;
-            continue;
-        }
-
-        int id = std::stoi(idStr);
-        Tile tile;
-        tile.type = static_cast<TileType>(id);
-
-        // 尝试直接加载
-        bool ok = tile.sprite.load(path.c_str());
-
-
-        if (!ok) {
-            std::cerr << "❌ Failed to load tile image: " << path
-                << "  (line " << lineNumber << ")" << std::endl;
-            continue; // 跳过此 tile，避免崩溃
-        }
-
-        // 使用移动语义插入，避免复制错误
-        tiles.emplace_back(std::move(tile));
-    }
-
-    file.close();
-
-    std::cout << "✅ Successfully loaded " << tiles.size()
-        << " tiles from " << filename << std::endl;
-
-    return tiles;
-}
-
-
-bool isPassable(TileType t, bool isHero) {
-    if (t == TileType::Water && isHero)
-        return false;
-    return true;
-}
-
-// === PLAYER / ENEMY ==========================================================
-
-class Hero {
-public:
-    int x, y;
-    int speed;
-    GamesEngineeringBase::Image sprite;
-
-    Hero() {
-        sprite.load("Resources/hero.png");
-
-        if (!sprite.load("Resources/hero.png")) {
-            std::cerr << "Failed to load hero.png" << std::endl;
-        }
-
-        x = 512;
-        y = 384;
-        speed = 200;
-    }
-
-    void update(GamesEngineeringBase::Window& w, float dt, TileMap& map, std::vector<Tile>& tiles) {
-        int move = static_cast<int>(speed * dt);
-        int nextX = x, nextY = y;
-
-        if (w.keyPressed('W')) nextY -= move;
-        if (w.keyPressed('S')) nextY += move;
-        if (w.keyPressed('A')) nextX -= move;
-        if (w.keyPressed('D')) nextX += move;
-
-        // 碰撞检测：Hero 不能进入 Water
-        int tileX = (nextX + sprite.width / 2) / 32;
-        int tileY = (nextY + sprite.height / 2) / 32;
-        if (tileY >= 0 && tileY < map.tileHeight && tileX >= 0 && tileX < map.tileWidth) {
-            TileType t = tiles[map.data[tileY][tileX]].type;
-            if (!isPassable(t, true)) {
-                return; // 阻止移动
+            // 其他类型NPC自动追踪英雄
+            float dx = heroX - x;
+            float dy = heroY - y;
+            float len = sqrtf(dx * dx + dy * dy);
+            if (len > 0.001f) {
+                dx /= len;
+                dy /= len;
+                x += dx * speed * dt;
+                y += dy * speed * dt;
             }
         }
-
-        x = nextX;
-        y = nextY;
     }
 
-    void draw(GamesEngineeringBase::Window& w, int camX, int camY) {
-        for (unsigned int yy = 0; yy < sprite.height; yy++)
-            for (unsigned int xx = 0; xx < sprite.width; xx++)
-                if (sprite.alphaAtUnchecked(xx, yy) > 0)
-                    w.draw(x + xx - camX, y + yy - camY, sprite.atUnchecked(xx, yy));
+    // 绘制
+    void draw(GamesEngineeringBase::Window& canvas, int camX, int camY) {
+        if (!alive) return;
+
+        int screenX = (int)(x - camX);
+        int screenY = (int)(y - camY);
+
+        // 超出屏幕不绘制（提高性能）
+        if (screenX + (int)sprite.width < 0 || screenY + (int)sprite.height < 0 ||
+            screenX >= (int)canvas.getWidth() || screenY >= (int)canvas.getHeight())
+            return;
+
+        for (unsigned int yy = 0; yy < sprite.height; yy++) {
+            for (unsigned int xx = 0; xx < sprite.width; xx++) {
+                int drawX = screenX + xx;
+                int drawY = screenY + yy;
+                if (drawX >= 0 && drawX < (int)canvas.getWidth() &&
+                    drawY >= 0 && drawY < (int)canvas.getHeight()) {
+                    canvas.draw(drawX, drawY, sprite.atUnchecked(xx, yy));
+                }
+            }
+        }
+    }
+
+    // 被攻击
+    void takeDamage(int dmg) {
+        hp -= dmg;
+        if (hp <= 0) {
+            alive = false;
+            hp = 0;
+        }
+    }
+
+    // 与英雄的简单碰撞检测
+    bool collidesWith(float heroX, float heroY, float heroRadius) const {
+        float dx = heroX - x;
+        float dy = heroY - y;
+        float r = radius + heroRadius;
+        return dx * dx + dy * dy < r * r;
     }
 };
 
-// === TILEMAP DRAWING =========================================================
 
-void drawTileMap(GamesEngineeringBase::Window& w, TileMap& map, std::vector<Tile>& tiles,
-    int cameraX, int cameraY, bool infinite) {
+class Manager {
+    Hero hero;
+    world w;
+    unsigned int x = 0;
+    unsigned int y = 0;
+    float dt;
+    Camera cam;
 
-    int startX = cameraX / map.tileWidth;
-    int startY = cameraY / map.tileHeight;
-    int endX = (cameraX + w.getWidth()) / map.tileWidth + 1;
-    int endY = (cameraY + w.getHeight()) / map.tileHeight + 1;
-
-    for (int y = startY; y < endY; y++) {
-        for (int x = startX; x < endX; x++) {
-            int mapX = x;
-            int mapY = y;
-
-            if (infinite) {
-                mapX = (x % map.tilesWide + map.tilesWide) % map.tilesWide;
-                mapY = (y % map.tilesHigh + map.tilesHigh) % map.tilesHigh;
-            }
-            else {
-                if (x < 0 || x >= map.tilesWide || y < 0 || y >= map.tilesHigh)
-                    continue;
-            }
-
-            int tileID = map.data[mapY][mapX];
-            if (tileID < 0 || tileID >= (int)tiles.size()) continue;
-
-            Tile& t = tiles[tileID];
-            for (unsigned int yy = 0; yy < t.sprite.height; yy++)
-                for (unsigned int xx = 0; xx < t.sprite.width; xx++)
-                    if (t.sprite.alphaAtUnchecked(xx, yy) > 0)
-                        w.draw(x * map.tileWidth + xx - cameraX,
-                            y * map.tileHeight + yy - cameraY,
-                            t.sprite.atUnchecked(xx, yy));
-        }
-    }
-}
-
-// === GAME ====================================================================
-
-class Game {
+    //bool drawAlpha = false;
 public:
-    GamesEngineeringBase::Window canvas;
-    GamesEngineeringBase::Timer timer;
-    Hero player;
-    TileMap map;
-    std::vector<Tile> tiles;
-    bool infiniteWorld;
-
-    Game(bool infinite = false) : infiniteWorld(infinite) {
-        srand(static_cast<unsigned int>(time(0)));
-        canvas.create(1024, 768, infinite ? "Infinite World" : "Fixed World");
-
-
-        // 1. 从文件加载 tile 贴图定义
-        tiles = std::move(loadTilesFromFile("Resources/tileset.txt"));
-
-
-        // 2. 加载 .tile 地图文件
-        map = loadTileFile("Resources/tiles.txt");
+    Manager(GamesEngineeringBase::Window& canvas) : hero(canvas, "Resources/L.png"), w() {}
+    Manager(GamesEngineeringBase::Window& canvas, string filename) : hero(canvas, "Resources/L.png"), w(filename) {
+        cam.width = canvas.getWidth();
+        cam.height = canvas.getHeight();
+        cam.x = hero.x - cam.width / 2;
+        cam.y = hero.y - cam.height / 2;
+    }
+    Manager(GamesEngineeringBase::Window& canvas, string filename, float dt) : hero(canvas, "Resources/L.png"), w(filename), dt() {
+        cam.width = canvas.getWidth();
+        cam.height = canvas.getHeight();
+        cam.x = hero.x - cam.width / 2;
+        cam.y = hero.y - cam.height / 2;
     }
 
 
-    void run() {
-        while (!canvas.keyPressed(VK_ESCAPE)) {
-            float dt = timer.dt();
-            update(dt);
-            render();
-        }
+    void update(GamesEngineeringBase::Window& canvas) {
+        /*int x = 0;
+        y = 0;*/
+        //scroll
+        //y += 2;
+        //drawAlpha = false;
+        /*if (canvas.keyPressed(VK_UP)) y += 5;
+        if (canvas.keyPressed(VK_DOWN)) y -= 1;
+        if (canvas.keyPressed(VK_LEFT)) x -= 1;
+        if (canvas.keyPressed(VK_RIGHT)) x += 1;*/
+        //if (canvas.keyPressed('A')) drawAlpha = true;
+        // 
+        int x = 0, y = 0;
+        if (canvas.keyPressed('W')) y -= 2;
+        if (canvas.keyPressed('S')) y += 2;
+        if (canvas.keyPressed('A')) x -= 2;
+        if (canvas.keyPressed('D')) x += 2;
+
+        hero.update(canvas, x, y);
+
+        // Camera follows hero
+        cam.x = hero.x - cam.width / 2;
+        cam.y = hero.y - cam.height / 2;
+
+        //cout << "Hero: " << hero.x << ", " << hero.y << endl;
+
+        //cout << "Camera: " << cam.x << ", " << cam.y << endl;
+        // //Clamp camera inside world bounds
+        //if (cam.x < 0) cam.x = 0;
+        //if (cam.y < 0) cam.y = 0;
+        //if (cam.x + cam.width > w.getPixelWidth())
+        //    cam.x = w.getPixelWidth() - cam.width;
+        //if (cam.y + cam.height > w.getPixelHeight())
+        //    cam.y = w.getPixelHeight() - cam.height;
+
+
+
+    }
+    void draw(GamesEngineeringBase::Window& canvas) {
+
+        w.draw(canvas, x, y);
+        hero.draw(canvas);
+
+        //// 英雄始终画在屏幕中心
+        //w.draw(canvas, cam.x, cam.y);
+        //hero.drawAt(canvas, cam.width / 2 - hero.sprite.width / 2,
+        //    cam.height / 2 - hero.sprite.height / 2);
+
+
     }
 
-    void update(float dt) {
-        player.update(canvas, dt, map, tiles);
-    }
-
-
-    template <typename T>
-    T clamp(T value, T minVal, T maxVal) {
-        return max(minVal, min(value, maxVal));
-    }
-
-
-    void render() {
-        canvas.clear();
-
-        int cameraX = player.x - canvas.getWidth() / 2;
-        int cameraY = player.y - canvas.getHeight() / 2;
-
-        if (!infiniteWorld) {
-            cameraX = clamp(cameraX, 0, map.tileWidth * 32 - (int)canvas.getWidth());
-            cameraY = clamp(cameraY, 0, map.tileHeight * 32 - (int)canvas.getHeight());
-        }
-
-        drawTileMap(canvas, map, tiles, cameraX, cameraY, infiniteWorld);
-        player.draw(canvas, cameraX, cameraY);
-
-        canvas.present();
-    }
 };
-
-// === MAIN ====================================================================
 
 //int main() {
-//    // 测试固定边界版本
-//    Game fixed(false);
-//    fixed.run();
 //
-//     //测试无限地图版本
-//     /*Game infinite(true);
-//     infinite.run();*/
+//    srand(static_cast<unsigned int>(time(nullptr)));
+//    // Create a canvas window with dimensions 1024x768 and title "Example"
+//    GamesEngineeringBase::Window canvas;
+//    canvas.create(1344, 1344, "Assessment");
 //
+//    // Timer object to manage time-based events, such as movement speed
+//    GamesEngineeringBase::Timer timer;
+//    float dt = timer.dt();
+//
+//    //Manager m(canvas);
+//    Manager m(canvas, "Resources/tiles.txt", dt);
+//    while (true)
+//    {
+//        // Check for input (key presses or window events)
+//        canvas.checkInput();
+//        // Clear the window for the next frame rendering
+//        canvas.clear();
+//
+//        if (canvas.keyPressed(VK_ESCAPE)) break;
+//
+//        m.update(canvas);
+//        m.draw(canvas);
+//
+//        canvas.present();
+//    }
 //    return 0;
+//
 //}
