@@ -199,23 +199,32 @@ public:
 
     //- File Handling end
 
+    void draw(GamesEngineeringBase::Window& canvas,unsigned int camX, unsigned int camY) {
 
-    void draw(GamesEngineeringBase::Window& canvas,unsigned int x, unsigned int y) {
-
-        unsigned int offset = tileWidth / 2;
-        unsigned int X = x / 384;
-        unsigned int Y = y / 384;
-
+        int once = 0;
         for (int i = 0; i < tilesHigh; i++) {
            for (int j = 0; j < tilesWide; j++) {
-                unsigned int tileID = data[i][j];
+
+               unsigned int x = (j + camX / tileWidth) % tilesHigh;
+               unsigned int y = (i + camY / tileHeight) % tilesWide;
+
+              /* if (!once) {
+                   cout << "start with " << y << ", " << x << endl;
+                   once++;
+               }*/
+               
+               unsigned int tileID = data[y][x];
 
                 // 计算绘制位置
+                
                 int yPos = i * tileHeight;
                 int xPos = j * tileWidth;
-                
 
-                // 绘制该 tile
+                /*int xPos = j * tileWidth;
+                int yPos = i * tileHeight;*/
+                
+                //cout << xPos << ", " << yPos << endl;
+                 // 绘制该 tile
                 //ts[tileID].setPosition(xPos, yPos);
                 ts[tileID].draw(canvas, xPos, yPos);
 
@@ -223,10 +232,12 @@ public:
                  //std::cout << "Draw tile ID=" << tileID << " at (" << xPos << "," << yPos << ")\n";
             }
         }
-       /* ts[data[Y % tileHeight]].draw(canvas, (canvas.getHeight() / 2) + offset);
-        ts[tarray[(Y + 1) % size]].draw(canvas, offset);
-        ts[tarray[(Y + 2) % size]].draw(canvas, offset - (canvas.getHeight() / 2));*/
+       
     }
+
+    
+
+
 
    /* void drawAlphas(GamesEngineeringBase::Window& canvas, unsigned int y) {
 
@@ -273,7 +284,7 @@ public:
     int x, y;
     int speed;
     GamesEngineeringBase::Image sprite;
-
+    
     Hero(GamesEngineeringBase::Window& canvas, std::string filename) {
         sprite.load(filename);
 
@@ -284,7 +295,8 @@ public:
             std::cerr << "Load hero! -- " << filename << endl;
         }
 
-        x = 640; y = 640;
+        x = (canvas.getWidth() - sprite.width) / 2; y = (canvas.getHeight() - sprite.height) / 2;
+        cout << "Hero: " << x << ", " << y << endl;
         speed = 300;
     }
 
@@ -335,6 +347,8 @@ public:
     void drawAt(GamesEngineeringBase::Window& canvas, int sx, int sy) {
         for (unsigned yy = 0; yy < sprite.height; ++yy)
             for (unsigned xx = 0; xx < sprite.width; ++xx) {
+                if (sprite.alphaAtUnchecked(xx, yy) == 0)
+                    continue; // 跳过透明区域
                 int X = sx + xx, Y = sy + yy;
                 if (0 <= X && X < (int)canvas.getWidth() && 0 <= Y && Y < (int)canvas.getHeight())
                     canvas.draw(X, Y, sprite.atUnchecked(xx, yy));
@@ -469,9 +483,22 @@ public:
 struct Camera {
     int x; // top-left corner of what we see in world space
     int y;
-    int width;
-    int height;
+    unsigned int width;
+    unsigned int height;
 };
+
+//class Camera {
+//    int x; // top-left corner of what we see in world space
+//    int y;
+//    unsigned int width;
+//    unsigned int height;
+//    Hero hero;
+//
+//public:
+//    Camera(Hero h){
+//
+//    }
+//};
 
 
 // 用于子弹
@@ -624,72 +651,100 @@ class Manager {
     unsigned int y = 0;
     float dt;
     Camera cam;
+    bool infiniteMode = true;
+
 
     //bool drawAlpha = false;
 public:
     Manager(GamesEngineeringBase::Window& canvas) : hero(canvas, "Resources/plane.png"), w() {}
     Manager(GamesEngineeringBase::Window& canvas, string filename) : hero(canvas, "Resources/plane.png"), w(filename) {
-        cam.width = canvas.getWidth();
-        cam.height = canvas.getHeight();
-        cam.x = hero.x - cam.width / 2;
-        cam.y = hero.y - cam.height / 2;
+        cam.width = w.getPixelWidth() / 2;
+        cam.height = w.getPixelHeight() / 2;
+        /*cam.x = hero.x - cam.width / 2;
+        cam.y = hero.y - cam.height / 2;*/
+
+        cam.x = w.getPixelWidth() / 4;
+        cam.y = w.getPixelHeight() / 4;
+
+
     }
-    Manager(GamesEngineeringBase::Window& canvas, string filename, float dt) : hero(canvas, "Resources/plane.png"), w(filename), dt(){
+    Manager(GamesEngineeringBase::Window& canvas, string filename, float dt) : hero(canvas, "Resources/hero1.png"), w(filename), dt(){
+
         cam.width = canvas.getWidth();
         cam.height = canvas.getHeight();
         cam.x = hero.x - cam.width / 2;
         cam.y = hero.y - cam.height / 2;
+
+        /*cam.x = w.getPixelWidth() / 4;
+        cam.y = w.getPixelHeight() / 4;*/
     }
 
+    void switchMapMode(GamesEngineeringBase::Window& canvas) {
+        static bool switchPressed = false;
+        if (canvas.keyPressed('M')) {
+            if (!switchPressed) { // 防止连按
+                infiniteMode = !infiniteMode;
+                cout << "Map mode switched to : "
+                    << (infiniteMode ? "Infinite" : "Fixed Boundary") << endl;
+            }
+            switchPressed = true;
+        }
+        else switchPressed = false;
+    }
 
     void update(GamesEngineeringBase::Window& canvas) {
-        /*int x = 0;
-        y = 0;*/
-        //scroll
-        //y += 2;
-        //drawAlpha = false;
-        /*if (canvas.keyPressed(VK_UP)) y += 5;
-        if (canvas.keyPressed(VK_DOWN)) y -= 1;
-        if (canvas.keyPressed(VK_LEFT)) x -= 1;
-        if (canvas.keyPressed(VK_RIGHT)) x += 1;*/
-        //if (canvas.keyPressed('A')) drawAlpha = true;
-        // 
-        int x = 0, y = 0;
-        if (canvas.keyPressed('W')) y -= 2;
-        if (canvas.keyPressed('S')) y += 2;
-        if (canvas.keyPressed('A')) x -= 2;
-        if (canvas.keyPressed('D')) x += 2;
 
+       /* int x = 0, y = 0;
+        int move = 5;
+        if (canvas.keyPressed('W')) y -= move;
+        if (canvas.keyPressed('S')) y += move;
+        if (canvas.keyPressed('A')) x -= move;
+        if (canvas.keyPressed('D')) x += move;*/
+        int mapW = w.getPixelWidth();
+        int mapH = w.getPixelHeight();
+        //switchMapMode(canvas);
         hero.update(canvas, x, y);
 
+        int move = 2;
+        if (canvas.keyPressed(VK_UP))    cam.y -= move;
+        if (canvas.keyPressed(VK_DOWN))  cam.y += move;
+        if (canvas.keyPressed(VK_LEFT))  cam.x -= move;
+        if (canvas.keyPressed(VK_RIGHT)) cam.x += move;
+
         // Camera follows hero
-        cam.x = hero.x - cam.width / 2;
-        cam.y = hero.y - cam.height / 2;
+     
+       /* cam.x = hero.x - canvas.getWidth() / 2;
+        cam.y = hero.y - canvas.getHeight() / 2;*/
 
-        //cout << "Hero: " << hero.x << ", " << hero.y << endl;
 
-        //cout << "Camera: " << cam.x << ", " << cam.y << endl;
-        // //Clamp camera inside world bounds
-        //if (cam.x < 0) cam.x = 0;
-        //if (cam.y < 0) cam.y = 0;
-        //if (cam.x + cam.width > w.getPixelWidth())
-        //    cam.x = w.getPixelWidth() - cam.width;
-        //if (cam.y + cam.height > w.getPixelHeight())
-        //    cam.y = w.getPixelHeight() - cam.height;
+        if (infiniteMode) {
+            // 无限循环模式
+            if (cam.x < 0) cam.x += mapW;
+            if (cam.y < 0) cam.y += mapH;
+            /*if (cam.x >= mapW) cam.x -= mapW;
+            if (cam.y >= mapH) cam.y -= mapH;*/
+        }
+        else {
+            // 固定边界模式
+            if (cam.x < 0) cam.x = 0;
+            if (cam.y < 0) cam.y = 0;
+            if (cam.x + cam.width > mapW) cam.x = mapW - cam.width;
+            if (cam.y + cam.height > mapH) cam.y = mapH - cam.height;
+        }
 
-        
 
     }
     void draw(GamesEngineeringBase::Window& canvas) {
         
-        w.draw(canvas, x, y);
+        
+        w.draw(canvas, cam.x, cam.y);
         hero.draw(canvas);
         
         //// 英雄始终画在屏幕中心
         //w.draw(canvas, cam.x, cam.y);
-        //hero.drawAt(canvas, cam.width / 2 - hero.sprite.width / 2,
-        //    cam.height / 2 - hero.sprite.height / 2);
-        
+        /*hero.drawAt(canvas, cam.width / 2 - hero.sprite.width / 2,
+            cam.height / 2 - hero.sprite.height / 2);*/
+
 
     }
 
@@ -700,7 +755,7 @@ int main() {
     srand(static_cast<unsigned int>(time(nullptr)));
     // Create a canvas window with dimensions 1024x768 and title "Example"
     GamesEngineeringBase::Window canvas;
-    canvas.create(1344, 1344, "Assessment");
+    canvas.create(1024, 1024, "Assessment");
 
     // Timer object to manage time-based events, such as movement speed
     GamesEngineeringBase::Timer timer;
