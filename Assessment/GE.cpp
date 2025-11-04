@@ -64,46 +64,69 @@ class world {
     unsigned int tileWidth = 0;
     unsigned int tileHeight = 0;
     unsigned int** data;
+    bool** isPassable;
+    
+    
     
 
-
 public:
-    world() : ts() {
-        data = new unsigned int* [worldSize];
-        for (int i = 0; i < worldSize; ++i)
-            data[i] = new unsigned int[worldSize];
+    unsigned int xIndex;
+    unsigned int yIndex;
 
+    world() : ts() {
 
         tilesWide = worldSize;
         tilesHigh = worldSize;
         tileWidth = worldSize;
         tileHeight = worldSize;
+        
+        data = new unsigned int* [worldSize];
+        isPassable = new  bool* [worldSize];
+
+        for (int i = 0; i < worldSize; ++i) {
+            data[i] = new unsigned int[worldSize];
+            isPassable[i] = new bool[worldSize];
+
+        }
+
         for (int i = 0; i < worldSize; i++) {
             for (int j = 0; j < worldSize; j++) {
                 data[i][j] = rand() % tileNum;
+                isPassable[i][j] = true;
             }
         }
+
+
+        
+
 
     }
 
     //- File handling start
 
     world(const std::string& filename) : ts() {
-        data = new unsigned int* [worldSize];
-        for (int i = 0; i < worldSize; ++i)
-            data[i] = new unsigned int[worldSize];
-
-
         tilesWide = worldSize;
         tilesHigh = worldSize;
         tileWidth = worldSize;
         tileHeight = worldSize;
+        
+        data = new unsigned int* [worldSize];
+        isPassable = new bool* [worldSize];
+
+        for (int i = 0; i < worldSize; ++i) {
+            data[i] = new unsigned int[worldSize];
+            isPassable[i] = new bool[worldSize];
+
+        }
+
         for (int i = 0; i < worldSize; i++) {
             for (int j = 0; j < worldSize; j++) {
                 data[i][j] = rand() % tileNum;
+                isPassable[i][j] = true;
             }
         }
-        
+
+
         std::ifstream fin(filename);
 
         if (!fin.is_open()) {
@@ -144,7 +167,17 @@ public:
 
                 while (std::getline(ss, value, ',') && value != "") {
                     //data[0][0] = std::stoi(value);
+
                     data[index1][index2] = std::stoi(value);
+
+                    if (stoi(value) >= 14 && stoi(value) <= 22) {
+                        //water impassable
+                        isPassable[index1][index2] = false;
+                    }
+                    else {
+                        isPassable[index1][index2] = true;
+                    }
+
                     //cout << value << endl;
                     index2++;
                 }
@@ -158,81 +191,62 @@ public:
 
         fin.close();
 
-        /*cout << index1 << " " << index2 << endl;
-        for (int i = 0; i < index1; i++) {
-            for (int j = 0; j < tilesHigh; j++) {
-                cout << data[i][j] << " ";
-            }
-            cout << endl;
-        }*/
-
-       
-
     }
-
     int getPixelWidth()  const { return tilesWide * tileWidth; }
     int getPixelHeight() const { return tilesHigh * tileHeight; }
 
-    //void draw(GamesEngineeringBase::Window& canvas, int camX, int camY) {
-    //    for (int i = 0; i < tilesHigh; ++i) {
-    //        for (int j = 0; j < tilesWide; ++j) {
-    //            const unsigned int tileID = data[i][j];
-    //            const int xPos = j * tileWidth - camX;
-    //            const int yPos = i * tileHeight - camY;
-    //            if (xPos + (int)tileWidth <= 0 || yPos + (int)tileHeight <= 0 ||
-    //                xPos >= (int)canvas.getWidth() || yPos >= (int)canvas.getHeight()) {
-    //                continue;
-    //            }
+    
+    // 根据像素坐标判断位置是否可走
+    bool Passable(unsigned int worldX,unsigned int worldY) {
+        int tileX = worldX / tileWidth  % tilesWide;
+        int tileY = worldY / tileHeight  % tilesHigh;
+        cout << tileX << ", " << tileY << endl;
 
-    //            ts[tileID].draw(canvas, xPos, yPos);
+        //// 限制范围
+        //if (tileX < 0 || tileY < 0 || tileX >= (int)tilesWide || tileY >= (int)tilesHigh)
+        //    return false; // 出界都视为不可通行
 
-    //            //std::cout << "Draw tile ID=" << tileID << " at (" << xPos << "," << yPos << ")\n";
-    //        }
-    //    }
-    //}
+        return isPassable[tileY][tileX];
+    }
 
     ~world() {
         for (int i = 0; i < worldSize; ++i)
             delete[] data[i];
         delete[] data;
+
+        for (int i = 0; i < worldSize; ++i)
+            delete[] isPassable[i];
+        delete[] isPassable;
     }
 
     //- File Handling end
 
     void draw(GamesEngineeringBase::Window& canvas,unsigned int camX, unsigned int camY) {
 
-        int offsetX = camX  % tileWidth;
+        int offsetX = camX % tileWidth;
         int offsetY = camY % tileHeight;
-        cout << "Offset:" << offsetX << ", " << offsetY << endl;
- 
+
+        xIndex = camX / tileWidth % tilesWide;
+        yIndex = camY / tileHeight % tilesHigh;
+
+        //cout << "start with" << xIndex << ", " << yIndex << endl;
 
         for (int i = 0; i < tilesHigh; i++) {
            for (int j = 0; j < tilesWide; j++) {
-
+               
                unsigned int x = (j + camX / tileWidth) % tilesWide;
                unsigned int y = (i + camY / tileHeight) % tilesHigh;
-
-              /* if (!once) {
-                   cout << "start with " << y << ", " << x << endl;
-                   once++;
-               }*/
                
                unsigned int tileID = data[y][x];
 
-                // 计算绘制位置
-                
-               /*int yPos = i * tileHeight;
-               int xPos = j * tileWidth;*/
+               // 计算绘制位置
 
                int yPos = i * tileHeight - offsetY;
                int xPos = j * tileWidth - offsetX;
-
-                /*int xPos = j * tileWidth;
-                int yPos = i * tileHeight;*/
                 
-                //cout << xPos << ", " << yPos << endl;
-                 // 绘制该 tile
-                //ts[tileID].setPosition(xPos, yPos);
+               //cout << xPos << ", " << yPos << endl;
+               // 绘制该 tile
+               //ts[tileID].setPosition(xPos, yPos);
                ts[tileID].draw(canvas, xPos, yPos);
 
                 // Debug输出
@@ -241,6 +255,8 @@ public:
         }
        
     }
+
+    
 
     
 
@@ -285,7 +301,6 @@ public:
     }*/
 };
 
-
 class Hero {
 public:
     int x, y;
@@ -302,22 +317,33 @@ public:
             std::cerr << "Load hero! -- " << filename << endl;
         }
 
-        x = (canvas.getWidth() - sprite.width) / 2; y = (canvas.getHeight() - sprite.height) / 2;
+        x = (canvas.getWidth() - sprite.width) / 2;
+        y = (canvas.getHeight() - sprite.height) / 2;
         cout << "Hero: " << x << ", " << y << endl;
         speed = 300;
     }
 
 
+    void back(GamesEngineeringBase::Window& canvas, int _x, int _y, int mapW, int mapH) {
 
-    void update(GamesEngineeringBase::Window& canvas, int _x, int _y) {
+        x -= _x;
+        y -= _y;
+        if (x < 0) x += mapW;
+        if (y < 0) y += mapH;
+        if (x >= mapW) x -= mapW;
+        if (y >= mapH) y -= mapH;
+
+    }
+
+    void update(GamesEngineeringBase::Window& canvas, int _x, int _y,int mapW, int mapH) {
+
         x += _x;
-        x = max(0, x);
-        x = min(static_cast<int>(canvas.getWidth()) - static_cast<int>(sprite.width), x);
-
         y += _y;
-        y = max(0, y);
-        y = min(static_cast<int>(canvas.getHeight()) - static_cast<int>(sprite.height), y);
-
+        if (x < 0) x += mapW;
+        if (y < 0) y += mapH;
+        if (x >= mapW) x -= mapW;
+        if (y >= mapH) y -= mapH;
+       
         // 限制在窗口范围内
        /* if (x < 0) x = 0;
         if (x > (int)canvas.getWidth() - (int)sprite.width)
@@ -494,18 +520,8 @@ struct Camera {
     unsigned int height;
 };
 
-//class Camera {
-//    int x; // top-left corner of what we see in world space
-//    int y;
-//    unsigned int width;
-//    unsigned int height;
-//    Hero hero;
-//
-//public:
-//    Camera(Hero h){
-//
-//    }
-//};
+
+
 
 
 // 用于子弹
@@ -667,14 +683,7 @@ public:
 
 
 };
-class NPC1 : public NPC {
-public:
 
-};
-
-class NPC2 : public NPC {
-
-};
 class Manager {
     Hero hero;
     world w;
@@ -689,26 +698,23 @@ class Manager {
 public:
     Manager(GamesEngineeringBase::Window& canvas) : hero(canvas, "Resources/plane.png"), w() {}
     Manager(GamesEngineeringBase::Window& canvas, string filename) : hero(canvas, "Resources/plane.png"), w(filename) {
-        cam.width = w.getPixelWidth() / 2;
-        cam.height = w.getPixelHeight() / 2;
+        cam.width = canvas.getWidth() / 2;
+        cam.height = canvas.getHeight() / 2;
         /*cam.x = hero.x - cam.width / 2;
         cam.y = hero.y - cam.height / 2;*/
-
         cam.x = w.getPixelWidth() / 4;
         cam.y = w.getPixelHeight() / 4;
-
 
     }
     Manager(GamesEngineeringBase::Window& canvas, string filename, float _dt) : hero(canvas, "Resources/hero1.png"), w(filename){
 
         cam.width = canvas.getWidth();
         cam.height = canvas.getHeight();
-        cam.x = hero.x - cam.width / 2;
-        cam.y = hero.y - cam.height / 2;
-
+        /*cam.x = hero.x - w.getPixelWidth() / 2;
+        cam.y = hero.y - w.getPixelHeight() / 2;*/
+        cam.x = 0;
+        cam.y = 0;
         dt = _dt;
-        /*cam.x = w.getPixelWidth() / 4;
-        cam.y = w.getPixelHeight() / 4;*/
     }
 
     void switchMapMode(GamesEngineeringBase::Window& canvas) {
@@ -724,39 +730,79 @@ public:
         else switchPressed = false;
     }
 
+    bool isPassable(int X, int Y, int width, int height) {
+        
+        // 检查英雄矩形的四个角
+        int corners[4][2] = {
+            {X, Y},
+            {X + width, Y},
+            {X, Y + height},
+            {X + width, Y + height}
+        };
+
+
+        for (int i = 0; i < 4; ++i) {
+            int cx = corners[i][0];
+            int cy = corners[i][1];
+            if (!w.Passable(cx, cy))
+                return false; // 只要有一个角在水 tile，就视为不可通行
+        }
+        return true;
+
+    }
+
+
     void update(GamesEngineeringBase::Window& canvas) {
 
-       /* int x = 0, y = 0;
-        int move = 5;
-        if (canvas.keyPressed('W')) y -= move;
-        if (canvas.keyPressed('S')) y += move;
-        if (canvas.keyPressed('A')) x -= move;
-        if (canvas.keyPressed('D')) x += move;*/
+        //cout << "Cam:" << cam.x << " " << cam.y << endl;
+
+        int dx = 0, dy = 0;
+        int move = 2;
+        if (canvas.keyPressed('W')) dy -= move;
+        if (canvas.keyPressed('S')) dy += move;
+        if (canvas.keyPressed('A')) dx -= move;
+        if (canvas.keyPressed('D')) dx += move;
+       
+        switchMapMode(canvas);
+
         int mapW = w.getPixelWidth();
         int mapH = w.getPixelHeight();
-        //switchMapMode(canvas);
-        hero.update(canvas, x, y);
 
-        int move = static_cast<int>(hero.speed * dt);
-        move = 2;
-        //cout << hero.speed << " " << move << endl;
-        if (canvas.keyPressed(VK_UP))    cam.y -= move;
-        if (canvas.keyPressed(VK_DOWN))  cam.y += move;
-        if (canvas.keyPressed(VK_LEFT))  cam.x -= move;
-        if (canvas.keyPressed(VK_RIGHT)) cam.x += move;
+
+        hero.update(canvas, dx, dy, mapW, mapH);
+        //TODO 检查地图是否能通过
+
+        if (!isPassable(hero.x, hero.y, hero.sprite.width, hero.sprite.height)) {
+            //hero.update(canvas, -dx, -dy, mapW, mapH);
+            hero.back(canvas, dx, dy, mapW, mapH);
+            cout << "impassable!!!" << endl;
+            
+        }
+
+        //int move = static_cast<int>(hero.speed * dt);
+        //move = 2;
+        ////cout << hero.speed << " " << move << endl;
+        //if (canvas.keyPressed(VK_UP))    cam.y -= move;
+        //if (canvas.keyPressed(VK_DOWN))  cam.y += move;
+        //if (canvas.keyPressed(VK_LEFT))  cam.x -= move;
+        //if (canvas.keyPressed(VK_RIGHT)) cam.x += move;
 
         // Camera follows hero
      
-       /* cam.x = hero.x - canvas.getWidth() / 2;
-        cam.y = hero.y - canvas.getHeight() / 2;*/
+        cam.x = hero.x + hero.sprite.width / 2 - canvas.getWidth() / 2;
+        cam.y = hero.y  + hero.sprite.height / 2 - canvas.getHeight() / 2;
 
 
         if (infiniteMode) {
             // 无限循环模式
-            if (cam.x < 0) cam.x += mapW;
+            if (cam.x < 0) cam.x += mapW; 
             if (cam.y < 0) cam.y += mapH;
-            /*if (cam.x >= mapW) cam.x -= mapW;
-            if (cam.y >= mapH) cam.y -= mapH;*/
+            if (cam.x > mapW) cam.x -= mapW;
+            if (cam.y > mapH) cam.y -= mapH;
+            //cout << "Cam:" << cam.x << " " << cam.y << endl;
+
+
+
         }
         else {
             // 固定边界模式
@@ -771,14 +817,13 @@ public:
     void draw(GamesEngineeringBase::Window& canvas) {
         
         
-        w.draw(canvas, cam.x, cam.y);
-        hero.draw(canvas);
+        /*w.draw(canvas, cam.x, cam.y);
+        hero.draw(canvas);*/
         
-        //// 英雄始终画在屏幕中心
-        //w.draw(canvas, cam.x, cam.y);
-        /*hero.drawAt(canvas, cam.width / 2 - hero.sprite.width / 2,
-            cam.height / 2 - hero.sprite.height / 2);*/
-
+        // 英雄始终画在屏幕中心
+        w.draw(canvas, cam.x, cam.y);
+        hero.drawAt(canvas, cam.width / 2 - hero.sprite.width / 2,
+            cam.height / 2 - hero.sprite.height / 2);
 
     }
 
@@ -789,7 +834,7 @@ int main() {
     srand(static_cast<unsigned int>(time(nullptr)));
     // Create a canvas window with dimensions 1024x768 and title "Example"
     GamesEngineeringBase::Window canvas;
-    canvas.create(1024, 768, "Assessment");
+    canvas.create(1024, 1024, "Assessment");
 
     // Timer object to manage time-based events, such as movement speed
     GamesEngineeringBase::Timer timer;
