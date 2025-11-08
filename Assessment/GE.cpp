@@ -24,7 +24,6 @@ inline float shortestDelta(float a, float b, float range) {
 }
 
 
-
 // ====== 极简 5x7 位图字体 ======
 struct Glyph5x7 {
     // 每一行 5 位有效，从左到右
@@ -548,7 +547,6 @@ public:
     virtual void update(float dt, float heroX, float heroY, int mapW, int mapH, bool inf, Projectile* bullets, int& bulletCount, int MAX_PROJECTILES) = 0;
     virtual void draw(GamesEngineeringBase::Window& canvas, int camX, int camY, int mapW, int mapH) {
         if (!alive) return;
-
         int sx = (int)(x - camX), sy = (int)(y - camY);
         sx = wrap(sx, mapW);
         sy = wrap(sy, mapH);
@@ -709,6 +707,8 @@ public:
         default:spawnX = camX + camW + margin; spawnY = camY + (rand() % camH); spawnX = wrap(spawnX, mapW);
             spawnY = wrap(spawnY, mapH); break;      // 右
         }
+
+
         // inifinite add mod
         BaseNPC* p = 0;
         if (type == 0) p = new NormalNPC();
@@ -756,6 +756,7 @@ public:
     }
 
     void drawAll(GamesEngineeringBase::Window& canvas, int camX, int camY, int mapW, int mapH) {
+
         // 敌人
         for (int i = 0; i < count; ++i) {
             if (slots[i]) {
@@ -829,11 +830,8 @@ class Manager {
     bool infiniteMode = true;
     int score; // 分数统计
     
-
-
     int mapW;
     int mapH;
-
 
     //NPC-related
     NPCManager npcManager;
@@ -857,6 +855,8 @@ public:
 
     bool gameOver;
     float gameOverTimer;
+    int offsetX;
+    int offsetY;
 
     Manager(GamesEngineeringBase::Window& canvas) : hero(canvas, "Resources/plane.png"), w() {}
     Manager(GamesEngineeringBase::Window& canvas, string filename) : hero(canvas, "Resources/hero1.png"), w(filename),score(0), gameOver(false), gameOverTimer(0.0f) {
@@ -866,7 +866,13 @@ public:
         cam.y = hero.y - w.getPixelHeight() / 2;*/
         cam.x = 0;
         cam.y = 0;
-       
+        mapW = w.getPixelWidth();
+        mapH = w.getPixelHeight();
+        
+        offsetX = hero.x + hero.sprite.width / 2 - canvas.getWidth() / 2;
+        offsetY = hero.y + hero.sprite.height / 2 - canvas.getHeight() / 2;
+        //cout << offsetX << " " << offsetY << endl;
+
         
         heroBulletCount = 0;
         heroShootCD = 0;
@@ -874,8 +880,7 @@ public:
         npcSpawnInterval = 3.0f; // 初始3秒生成敌人
 
         gameTime = 0;
-        mapW = w.getPixelWidth();
-        mapH = w.getPixelHeight();
+        
     }
     Manager(GamesEngineeringBase::Window& canvas, string filename, float _dt) : hero(canvas, "Resources/hero1.png"), w(filename){
 
@@ -976,13 +981,28 @@ public:
         }
         //cout << "Hero: " << hero.x << ", " << hero.y << endl;
 
+
+
         // === 相机跟随 Hero ===
         cam.x = hero.x + hero.sprite.width / 2 - canvas.getWidth() / 2;
         cam.y = hero.y + hero.sprite.height / 2 - canvas.getHeight() / 2;
+        //cout << "cam:" << cam.x << ", " << cam.y << endl;
+
+        //
+        
+        
+        
+
 
         if (infiniteMode) {
             cam.x = wrap(cam.x, mapW);
             cam.y = wrap(cam.y, mapH);
+
+            x = cam.x - offsetX;
+            y = cam.y - offsetY;
+            x = wrap(x, mapW); 
+            y = wrap(y, mapH); 
+
         }
         else {
             //todo
@@ -1010,61 +1030,81 @@ public:
         float heroWorldX = hero.x + hero.sprite.width * 0.5f;
         float heroWorldY = hero.y + hero.sprite.height * 0.5f;
 
-        /*if (infiniteMode) {
-            heroWorldX = updateX(heroWorldX);
-            heroWorldY = updateY(heroWorldY);
-        }*/
-
+        if (infiniteMode) {
+            heroWorldX = wrap(heroWorldX, mapW);
+            heroWorldY = wrap(heroWorldY, mapH);
+        }
         
-        // ====== 自动射击最近敌人（世界坐标修正版） ======
-        //heroShootCD -= dt;
-        //if (heroShootCD <= 0.f && heroBulletCount < MAX_HERO_PROJECTILES) {
-        //    float best = 1e30f;
-        //    float targetX = 0, targetY = 0;
 
-        //    // 选最近敌人（考虑无限地图最短距离）
-        //    for (int i = 0; i < MAX_NPCS; ++i) {
-        //        BaseNPC* e = npcManager.slots[i];
-        //        if (!e || !e->isAlive()) continue;
-        //        float dx = shortestDelta(e->getX(), heroWorldX, mapW);
-        //        float dy = shortestDelta(e->getY(), heroWorldY, mapH);
-        //        float d2 = dx * dx + dy * dy;
-        //        if (d2 < best) { best = d2; targetX = e->getX(); targetY = e->getY(); }
-        //    }
+         // ====== 自动射击最近敌人（世界坐标修正版） ======
+        heroShootCD -= dt;
+        if (heroShootCD <= 0.f && heroBulletCount < MAX_HERO_PROJECTILES) {
+            float best = 1e30f;
+            float targetX = 0, targetY = 0;
 
-        //    if (best < 1e8f) {
-        //        // 从英雄中心点发射（世界坐标）
-        //        float dx = shortestDelta(targetX, heroWorldX, mapW);
-        //        float dy = shortestDelta(targetY, heroWorldY, mapH);
-        //        float len = sqrtf(dx * dx + dy * dy);
-        //        if (len > 0.001f) { dx /= len; dy /= len; }
+            // 选最近敌人（考虑无限地图最短距离）
+            for (int i = 0; i < MAX_NPCS; ++i) {
+                BaseNPC* e = npcManager.slots[i];
+                if (!e || !e->isAlive()) continue;
+                float dx = shortestDelta(e->getX(), heroWorldX, mapW);
+                float dy = shortestDelta(e->getY(), heroWorldY, mapH);
+                float d2 = dx * dx + dy * dy;
+                if (d2 < best) { best = d2; targetX = e->getX(); targetY = e->getY(); }
+            }
 
-        //        heroBullets[heroBulletCount++] =
-        //            Projectile(heroWorldX, heroWorldY, dx * bulletSpeed, dy * bulletSpeed, bulletDamage, true);
+            if (best < 1e8f) {
+                // 从英雄中心点发射（世界坐标）
+                float dx = shortestDelta(targetX, heroWorldX, mapW);
+                float dy = shortestDelta(targetY, heroWorldY, mapH);
+                float len = sqrtf(dx * dx + dy * dy);
+                if (len > 0.001f) { dx /= len; dy /= len; }
 
-        //        heroShootCD = heroShootInterval;
-        //        std::cout << "🔥 Hero fired (world) X=" << heroWorldX << " Y=" << heroWorldY << std::endl;
-        //    }
-        //}
+                heroBullets[heroBulletCount++] =
+                    Projectile(heroWorldX, heroWorldY, dx * bulletSpeed, dy * bulletSpeed, bulletDamage, true);
+
+                heroShootCD = heroShootInterval;
+                //std::cout << "🔥 Hero  X=" << hero.x << " Y=" << hero.y << std::endl;
+                std::cout << "🔥 Hero fired (world) X=" << heroWorldX << " Y=" << heroWorldY << std::endl;
+            }
+        }
 
 
         // ====== 🧩 更新 Hero 子弹（世界坐标 + 包裹） ======
-        /*for (int i = 0; i < heroBulletCount; ++i) {
-            if (!heroBullets[i].alive) continue;
-
+        for (int i = 0; i < heroBulletCount; ++i) {
+            if (!heroBullets[i].alive)
+            {
+                continue;
+            }
+            
             heroBullets[i].x += heroBullets[i].vx * dt;
             heroBullets[i].y += heroBullets[i].vy * dt;
+            int ox = wrap(heroBullets[i].x - cam.x, mapW);
+            int oy = wrap(heroBullets[i].y - cam.y, mapH);
+            if (ox < 0 || ox >= cam.width ||
+                oy < 0 || oy >= cam.height) {
+                cout << "herobullet dead:" << heroBullets[i].x << ", " << heroBullets[i].y << endl;
 
-            if (infiniteMode) {
+                heroBullets[i].alive = false;
+            }
+          
+            /*if (infiniteMode) {
+
                 heroBullets[i].x = wrap(heroBullets[i].x, (float)mapW);
                 heroBullets[i].y = wrap(heroBullets[i].y, (float)mapH);
-            }
-            else {
-                if (heroBullets[i].x < 0 || heroBullets[i].x >= mapW ||
-                    heroBullets[i].y < 0 || heroBullets[i].y >= mapH)
+
+                if (heroBullets[i].x < cam.x || heroBullets[i].x >= cam.x + cam.width || 
+                    heroBullets[i].y < cam.y || heroBullets[i].y >= cam.y + cam.height) {
                     heroBullets[i].alive = false;
-            }
-        }*/
+                }
+
+            }*/
+            //else {
+            //    if (heroBullets[i].x < 0 || heroBullets[i].x >= mapW ||
+            //        heroBullets[i].y < 0 || heroBullets[i].y >= mapH)
+            //        heroBullets[i].alive = false;
+            //}
+
+        }
 
 
         // ====== 检查 Hero 子弹命中敌人 ======
@@ -1137,6 +1177,39 @@ public:
         }
     }
 
+    void drawHeroBullets(GamesEngineeringBase::Window& canvas,
+        Projectile heroBullets[], int heroBulletCount,
+        Camera cam, int mapW, int mapH, bool infiniteMode)
+    {
+        for (int i = 0; i < heroBulletCount; ++i) {
+            if (!heroBullets[i].alive) continue;
+
+            // 世界坐标 → 屏幕坐标
+            int sx = (int)(heroBullets[i].x - cam.x);
+            int sy = (int)(heroBullets[i].y - cam.y);
+
+            // 如果是无限地图，确保画在“最近的镜像”
+            if (infiniteMode) {
+                if (sx > mapW / 2) sx -= mapW;
+                if (sx < -mapW / 2) sx += mapW;
+                if (sy > mapH / 2) sy -= mapH;
+                if (sy < -mapH / 2) sy += mapH;
+            }
+
+            // 屏幕内才绘制
+            if (sx < 0 || sy < 0 ||
+                sx >= (int)canvas.getWidth() ||
+                sy >= (int)canvas.getHeight()) continue;
+
+            // 🔴 子弹半径和颜色
+            const int radius = 5;
+            for (int dx = -radius; dx <= radius; ++dx)
+                for (int dy = -radius; dy <= radius; ++dy)
+                    if (dx * dx + dy * dy <= radius * radius)
+                        canvas.draw(sx + dx, sy + dy, 255, 80, 80);
+        }
+    }
+
 
     void draw(GamesEngineeringBase::Window& canvas) {
         
@@ -1148,15 +1221,35 @@ public:
         w.draw(canvas, cam.x, cam.y);
         npcManager.drawAll(canvas, cam.x, cam.y, mapW, mapH);
 
-        
-        
-         
-        // ===== Hero 子弹 =====
+       
+         //===== Hero 子弹 =====
         for (int i = 0; i < heroBulletCount; ++i) {
-            if (!heroBullets[i].alive) continue;
+            if (!heroBullets[i].alive) {
+                //cout << "bullet dead" << endl;
+                continue;
+            }
             int sx = (int)(heroBullets[i].x - cam.x) ;
             int sy = (int)(heroBullets[i].y - cam.y) ;
             
+            // 如果是无限地图，确保画在“最近的镜像”
+            if (infiniteMode) {
+                if (sx > mapW / 2) sx -= mapW;
+                if (sx < -mapW / 2) sx += mapW;
+                if (sy > mapH / 2) sy -= mapH;
+                if (sy < -mapH / 2) sy += mapH;
+            }
+
+            // 屏幕内才绘制
+            if (sx < 0 || sy < 0 ||
+                sx >= (int)canvas.getWidth() ||
+                sy >= (int)canvas.getHeight()) continue;
+            /*if (sx < 0 || sx >= canvas.getWidth() || sy < 0 || sy >= canvas.getHeight()) {
+                continue;
+            }*/
+
+            /*int sx = cam.width / 2 - hero.sprite.width / 2;
+            int sy = cam.height / 2 - hero.sprite.height / 2;*/
+
             // 子弹半径（越大越明显）
             const int radius = 4;
 
@@ -1169,12 +1262,15 @@ public:
 
                         if (px >= 0 && px < (int)canvas.getWidth() &&
                             py >= 0 && py < (int)canvas.getHeight()) {
+                            //cout << "draw point"   << i << endl;
                             canvas.draw(px, py, 255, 0, 0); // 红色
                         }
                     }
                 }
             }
         }
+        //drawHeroBullets(canvas, heroBullets, heroBulletCount, cam, mapW, mapH, infiniteMode);
+
 
         // hero始终画在屏幕中心
         hero.drawAt(canvas, cam.width / 2 - hero.sprite.width / 2,
@@ -1276,8 +1372,6 @@ public:
     }
 
 
-   
-
     void gameOverScreen(GamesEngineeringBase::Window& canvas, float dt) {
         // 半透明黑背景
         for (int y = 0; y < (int)canvas.getHeight(); y++)
@@ -1295,7 +1389,6 @@ public:
         // 倒计时退出
         gameOverTimer -= dt;
     }
-
 
 
 
@@ -1322,7 +1415,6 @@ private:
     float npcManagerEnemyX(int i) { return npcManager.slots[i]->getX(); }
     float npcManagerEnemyY(int i) { return npcManager.slots[i]->getY(); }
     void npcManagerDamage(int i, int dmg) { npcManager.slots[i]->takeDamage(dmg); }
-
 
 };
 
