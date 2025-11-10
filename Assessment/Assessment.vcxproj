@@ -124,7 +124,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Game.cpp" />
-    <ClCompile Include="GE.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GamesEngineeringBase.h" />
